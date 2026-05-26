@@ -1,0 +1,96 @@
+<!--
+  Anthropic messages operation policy with outbound metrics ingestion.
+  Replace INGEST_URL and INGEST_SHARED_SECRET before pasting into Azure APIM.
+-->
+<policies>
+  <inbound>
+    <base />
+    <set-backend-service backend-id="hhx-apiClaude-backend" />
+    <rewrite-uri template="/anthropic/v1/messages" copy-unmatched-params="true" />
+
+    <set-header name="x-api-key" exists-action="override">
+      <value>{{Foundry-API-Key}}</value>
+    </set-header>
+    <set-header name="anthropic-version" exists-action="override">
+      <value>2023-06-01</value>
+    </set-header>
+    <set-header name="Content-Type" exists-action="override">
+      <value>application/json</value>
+    </set-header>
+  </inbound>
+
+  <backend>
+    <base />
+  </backend>
+
+  <outbound>
+    <base />
+
+    <!-- Capture the response body without consuming it -->
+    <set-variable name="responseBody" value="@((string)context.Response.Body.As<string>(preserveContent: true))" />
+
+    <!-- Parse key values from the Anthropic response JSON -->
+    <set-variable name="responseJObject" value="@{
+      try {
+        return Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables[\"responseBody\"]);
+      }
+      catch {
+        return new Newtonsoft.Json.Linq.JObject();
+      }
+    }" />
+
+    <set-variable name="responseModel" value="@{
+      var body = (Newtonsoft.Json.Linq.JObject)context.Variables[\"responseJObject\"];
+      return (string)body.SelectToken(\"model\") ?? \"unknown\";
+    }" />
+
+    <set-variable name="inputTokens" value="@{
+      var body = (Newtonsoft.Json.Linq.JObject)context.Variables[\"responseJObject\"];
+      var token = body.SelectToken(\"usage.input_tokens\");
+      return token == null ? 0 : (int)token;
+    }" />
+
+    <set-variable name="outputTokens" value="@{
+      var body = (Newtonsoft.Json.Linq.JObject)context.Variables[\"responseJObject\"];
+      var token = body.SelectToken(\"usage.output_tokens\");
+      return token == null ? 0 : (int)token;
+    }" />
+
+    <set-variable name="totalTokens" value="@((int)context.Variables[\"inputTokens\"] + (int)context.Variables[\"outputTokens\"] )" />
+
+    <!-- Build normalized metrics payload -->
+    <set-variable name="metricsPayload" value="@{
+      var payload = new Newtonsoft.Json.Linq.JObject(
+        new Newtonsoft.Json.Linq.JProperty(\"provider\", \"anthropic\"),
+        new Newtonsoft.Json.Linq.JProperty(\"endpoint\", \"/anthropic/v1/messages\"),
+        new Newtonsoft.Json.Linq.JProperty(\"model\", (string)context.Variables[\"responseModel\"]),
+        new Newtonsoft.Json.Linq.JProperty(\"statusCode\", context.Response.StatusCode),
+        new Newtonsoft.Json.Linq.JProperty(\"inputTokens\", (int)context.Variables[\"inputTokens\"]),
+        new Newtonsoft.Json.Linq.JProperty(\"outputTokens\", (int)context.Variables[\"outputTokens\"]),
+        new Newtonsoft.Json.Linq.JProperty(\"totalTokens\", (int)context.Variables[\"totalTokens\"]),
+        new Newtonsoft.Json.Linq.JProperty(\"timestamp\", System.DateTime.UtcNow.ToString(\"o\")),
+        new Newtonsoft.Json.Linq.JProperty(\"subscriptionId\", context.Subscription?.Id ?? \"unknown\"),
+        new Newtonsoft.Json.Linq.JProperty(\"subscriptionName\", context.Subscription?.Name ?? \"unknown\"),
+        new Newtonsoft.Json.Linq.JProperty(\"requestId\", context.RequestId.ToString())
+      );
+      return payload.ToString();
+    }" />
+
+    <!-- Fire-and-forget post to your webapp ingestion endpoint -->
+    <send-one-way-request mode="new" timeout="10">
+      <set-url>INGEST_URL</set-url>
+      <set-method>POST</set-method>
+      <set-header name="Content-Type" exists-action="override">
+        <value>application/json</value>
+      </set-header>
+      <set-header name="x-ingest-secret" exists-action="override">
+        <value>INGEST_SHARED_SECRET</value>
+      </set-header>
+      <set-body>@((string)context.Variables["metricsPayload"])</set-body>
+    </send-one-way-request>
+  </outbound>
+
+  <on-error>
+    <base />
+  </on-error>
+</policies>
