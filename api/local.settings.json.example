@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "APPINSIGHTS_APP_ID": "paste App Insights Application ID here",
+    "APPINSIGHTS_API_KEY": "paste App Insights API key (read telemetry) here"
+  }
+}
