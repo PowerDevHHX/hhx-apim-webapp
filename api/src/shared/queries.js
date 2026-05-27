@@ -4,98 +4,151 @@
 //   customEvents.name in ('AIUsage', 'AIUsageError')
 //   customDimensions.{ provider, model, developer, userEmail, subscriptionName,
 //                      backendId, operation, statusCode, ... }
-//   customMeasurements.{ promptTokens, completionTokens, totalTokens }
+//   customMeasurements.{ promptTokens, completionTokens, totalTokens,
+//                        freshPromptTokens, cachedPromptTokens, cacheCreationTokens }
+//
+// Manual cleanup note:
+//   Exclude old PowerShell/manual test rows from dashboard queries by filtering
+//   developer == 'drew@manual'. This hides them from the dashboard without
+//   deleting raw telemetry from App Insights.
+
+const BASE_USAGE_FILTER = `
+customEvents
+| where name == "AIUsage"
+| extend
+    developerRaw = tostring(customDimensions.developer),
+    developer = iff(isempty(trim(' ', developerRaw)), "unknown", developerRaw),
+    provider  = tostring(customDimensions.provider),
+    model     = tostring(customDimensions.model),
+    statusCode = toint(customDimensions.statusCode),
+    isStream  = tostring(customDimensions.isStream),
+    responseId = tostring(customDimensions.responseId),
+    promptT   = toint(customMeasurements.promptTokens),
+    completeT = toint(customMeasurements.completionTokens),
+    totalT    = toint(customMeasurements.totalTokens),
+    freshPromptT = toint(customMeasurements.freshPromptTokens),
+    cachedPromptT = toint(customMeasurements.cachedPromptTokens),
+    cacheCreationT = toint(customMeasurements.cacheCreationTokens)
+| where developer != "drew@manual"
+`;
 
 // Today (UTC) — per user / per model aggregates.
 const DAILY = `
-customEvents
-| where name == "AIUsage" and timestamp > startofday(now())
-| extend
-    developer = tostring(customDimensions.developer),
-    model     = tostring(customDimensions.model),
-    promptT   = toint(customMeasurements.promptTokens),
-    completeT = toint(customMeasurements.completionTokens),
-    totalT    = toint(customMeasurements.totalTokens)
+${BASE_USAGE_FILTER}
+| where timestamp > startofday(now())
 | summarize
-    calls         = count(),
-    input_tokens  = sum(promptT),
-    output_tokens = sum(completeT),
-    total_tokens  = sum(totalT)
-  by developer, model
+    calls                 = count(),
+    success_calls         = countif(statusCode >= 200 and statusCode < 300),
+    failed_calls          = countif(statusCode < 200 or statusCode >= 300),
+    rate_limited_calls    = countif(statusCode == 429),
+    input_tokens          = sum(promptT),
+    output_tokens         = sum(completeT),
+    total_tokens          = sum(totalT),
+    fresh_prompt_tokens   = sum(freshPromptT),
+    cached_prompt_tokens  = sum(cachedPromptT),
+    cache_creation_tokens = sum(cacheCreationT)
+  by developer, provider, model
 | order by total_tokens desc
 `;
 
 // This calendar month (UTC) — per user / per model aggregates.
 const MONTHLY = `
-customEvents
-| where name == "AIUsage" and timestamp >= startofmonth(now())
-| extend
-    developer = tostring(customDimensions.developer),
-    model     = tostring(customDimensions.model),
-    promptT   = toint(customMeasurements.promptTokens),
-    completeT = toint(customMeasurements.completionTokens),
-    totalT    = toint(customMeasurements.totalTokens)
+${BASE_USAGE_FILTER}
+| where timestamp >= startofmonth(now())
 | summarize
-    calls         = count(),
-    input_tokens  = sum(promptT),
-    output_tokens = sum(completeT),
-    total_tokens  = sum(totalT)
-  by developer, model
+    calls                 = count(),
+    success_calls         = countif(statusCode >= 200 and statusCode < 300),
+    failed_calls          = countif(statusCode < 200 or statusCode >= 300),
+    rate_limited_calls    = countif(statusCode == 429),
+    input_tokens          = sum(promptT),
+    output_tokens         = sum(completeT),
+    total_tokens          = sum(totalT),
+    fresh_prompt_tokens   = sum(freshPromptT),
+    cached_prompt_tokens  = sum(cachedPromptT),
+    cache_creation_tokens = sum(cacheCreationT)
+  by developer, provider, model
 | order by total_tokens desc
 `;
 
 // Last 5 minutes — per user / per model.
 const REALTIME = `
-customEvents
-| where name == "AIUsage" and timestamp > ago(5m)
-| extend
-    developer = tostring(customDimensions.developer),
-    model     = tostring(customDimensions.model),
-    promptT   = toint(customMeasurements.promptTokens),
-    completeT = toint(customMeasurements.completionTokens)
+${BASE_USAGE_FILTER}
+| where timestamp > ago(5m)
 | summarize
-    calls         = count(),
-    input_tokens  = sum(promptT),
-    output_tokens = sum(completeT)
-  by developer, model
+    calls                 = count(),
+    success_calls         = countif(statusCode >= 200 and statusCode < 300),
+    failed_calls          = countif(statusCode < 200 or statusCode >= 300),
+    rate_limited_calls    = countif(statusCode == 429),
+    input_tokens          = sum(promptT),
+    output_tokens         = sum(completeT),
+    total_tokens          = sum(totalT),
+    fresh_prompt_tokens   = sum(freshPromptT),
+    cached_prompt_tokens  = sum(cachedPromptT),
+    cache_creation_tokens = sum(cacheCreationT)
+  by developer, provider, model
 | order by calls desc
 `;
 
 // Last 24 hours bucketed into 30-minute slots, one row per developer per slot.
 const TREND_24H = `
-customEvents
-| where name == "AIUsage" and timestamp > ago(24h)
-| extend
-    developer = tostring(customDimensions.developer),
-    totalT    = toint(customMeasurements.totalTokens)
+${BASE_USAGE_FILTER}
+| where timestamp > ago(24h)
 | summarize tokens = sum(totalT) by bin(timestamp, 30m), developer
 | order by timestamp asc
 `;
 
 // Today — per model totals (for the pie chart).
 const BY_MODEL = `
-customEvents
-| where name == "AIUsage" and timestamp > startofday(now())
-| extend
-    model  = tostring(customDimensions.model),
-    totalT = toint(customMeasurements.totalTokens)
+${BASE_USAGE_FILTER}
+| where timestamp > startofday(now())
 | summarize total_tokens = sum(totalT) by model
 | order by total_tokens desc
 `;
 
 // Last 60 minutes — individual request feed.
 const LIVE_FEED = `
-customEvents
-| where name == "AIUsage" and timestamp > ago(60m)
-| extend
-    developer    = tostring(customDimensions.developer),
-    model        = tostring(customDimensions.model),
-    prompt_tokens  = toint(customMeasurements.promptTokens),
-    output_tokens  = toint(customMeasurements.completionTokens),
-    total_tokens   = toint(customMeasurements.totalTokens)
-| project timestamp, developer, model, prompt_tokens, output_tokens, total_tokens
+${BASE_USAGE_FILTER}
+| where timestamp > ago(60m)
+| project timestamp, developer, provider, model, statusCode, isStream, responseId,
+          prompt_tokens=promptT, output_tokens=completeT, total_tokens=totalT,
+          fresh_prompt_tokens=freshPromptT, cached_prompt_tokens=cachedPromptT,
+          cache_creation_tokens=cacheCreationT
 | order by timestamp desc
 | take 200
 `;
 
-module.exports = { DAILY, MONTHLY, REALTIME, TREND_24H, BY_MODEL, LIVE_FEED };
+const WINDOWS = {
+  '5m': '5m',
+  '30m': '30m',
+  '1h': '1h',
+  '5h': '5h',
+  '8h': '8h',
+  '1d': '1d',
+  '1w': '7d',
+  '1mo': '30d',
+};
+
+function usageSummaryQuery(windowKey = '1d') {
+  const duration = WINDOWS[windowKey] || WINDOWS['1d'];
+  return `
+${BASE_USAGE_FILTER}
+| where timestamp > ago(${duration})
+| summarize
+    calls                 = count(),
+    success_calls         = countif(statusCode >= 200 and statusCode < 300),
+    failed_calls          = countif(statusCode < 200 or statusCode >= 300),
+    rate_limited_calls    = countif(statusCode == 429),
+    active_users          = dcount(developer),
+    active_models         = dcount(model),
+    input_tokens          = sum(promptT),
+    output_tokens         = sum(completeT),
+    total_tokens          = sum(totalT),
+    fresh_prompt_tokens   = sum(freshPromptT),
+    cached_prompt_tokens  = sum(cachedPromptT),
+    cache_creation_tokens = sum(cacheCreationT)
+  by provider
+| order by total_tokens desc
+`;
+}
+
+module.exports = { DAILY, MONTHLY, REALTIME, TREND_24H, BY_MODEL, LIVE_FEED, usageSummaryQuery, WINDOWS };
