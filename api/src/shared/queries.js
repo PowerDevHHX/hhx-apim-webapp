@@ -17,7 +17,6 @@ customEvents
 | where name == "AIUsage"
 | extend
     developerRaw = tostring(customDimensions.developer),
-    developer = iff(isempty(trim(' ', developerRaw)), "unknown", developerRaw),
     provider  = tostring(customDimensions.provider),
     model     = tostring(customDimensions.model),
     statusCode = toint(customDimensions.statusCode),
@@ -29,6 +28,8 @@ customEvents
     freshPromptT = toint(customMeasurements.freshPromptTokens),
     cachedPromptT = toint(customMeasurements.cachedPromptTokens),
     cacheCreationT = toint(customMeasurements.cacheCreationTokens)
+| extend
+    developer = iff(isempty(trim(' ', developerRaw)), "unknown", developerRaw)
 | where developer != "drew@manual"
 `;
 
