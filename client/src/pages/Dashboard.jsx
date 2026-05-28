@@ -205,7 +205,7 @@ export default function Dashboard() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #30363d" }}>
-                  {["Provider", "Calls", "Tokens", "Fresh", "Cached", "Cache Create", "Cost", "Cache Hit"].map((h) => (
+                  {["Provider", "Calls", "Tokens", "Fresh In", "Cached", "Cache Create", "Cost", "Cache Hit"].map((h) => (
                     <th key={h} style={{ textAlign: "left", padding: "8px 12px", color: "#8b949e", fontWeight: 500 }}>{h}</th>
                   ))}
                 </tr>
@@ -264,7 +264,7 @@ export default function Dashboard() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #30363d" }}>
-                    {["User", "Provider", "Model", "Calls", "Input", "Cached", "Cache Create", "Output", "Total", "Cache Hit", "Est. Cost"].map((h) => (
+                    {["User", "Provider", "Model", "Calls", "Input", "Fresh In", "Cached", "Cache Create", "Output", "Total", "Cache Hit", "Est. Cost"].map((h) => (
                       <th key={h} style={{ textAlign: "left", padding: "8px 12px", color: "#8b949e", fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
@@ -272,7 +272,7 @@ export default function Dashboard() {
                 <tbody>
                   {windowRows.length === 0 ? (
                     <tr>
-                      <td colSpan={11} style={{ padding: "24px 12px", color: "#8b949e", textAlign: "center" }}>
+                      <td colSpan={12} style={{ padding: "24px 12px", color: "#8b949e", textAlign: "center" }}>
                         No usage data yet. This table will populate once the API is connected.
                       </td>
                     </tr>
@@ -284,6 +284,7 @@ export default function Dashboard() {
                         <td style={{ padding: "8px 12px", color: "#bc8cff", fontFamily: "monospace" }}>{r.model}</td>
                         <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtInt(r.calls)}</td>
                         <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtInt(r.input_tokens)}</td>
+                        <td style={{ padding: "8px 12px", color: "#58a6ff", fontWeight: 600 }}>{fmtInt(r.fresh_prompt_tokens)}</td>
                         <td style={{ padding: "8px 12px", color: "#79c0ff" }}>{fmtInt(r.cached_prompt_tokens)}</td>
                         <td style={{ padding: "8px 12px", color: "#ffa657" }}>{fmtInt(r.cache_creation_tokens)}</td>
                         <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtInt(r.output_tokens)}</td>
@@ -354,7 +355,7 @@ export default function Dashboard() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #30363d" }}>
-                  {["User", "Provider", "Model", "Calls", "Input", "Cached", "Output"].map((h) => (
+                  {["User", "Provider", "Model", "Calls", "Input", "Fresh In", "Cached", "Output"].map((h) => (
                     <th key={h} style={{ padding: "8px 12px", color: "#8b949e", textAlign: "left" }}>{h}</th>
                   ))}
                 </tr>
@@ -367,6 +368,7 @@ export default function Dashboard() {
                     <td style={{ padding: "8px 12px", color: "#bc8cff", fontFamily: "monospace" }}>{r.model}</td>
                     <td style={{ padding: "8px 12px", color: "#58a6ff", fontWeight: 600 }}>{fmtInt(r.calls)}</td>
                     <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtInt(r.input_tokens)}</td>
+                    <td style={{ padding: "8px 12px", color: "#58a6ff", fontWeight: 600 }}>{fmtInt(r.fresh_prompt_tokens)}</td>
                     <td style={{ padding: "8px 12px", color: "#79c0ff" }}>{fmtInt(r.cached_prompt_tokens)}</td>
                     <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtInt(r.output_tokens)}</td>
                   </tr>
@@ -387,7 +389,7 @@ export default function Dashboard() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "monospace" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #30363d" }}>
-                    {["Time", "User", "Provider", "Model", "Status", "In", "Cached", "Out", "Total"].map((h) => (
+                    {["Time", "User", "Provider", "Model", "Status", "In", "Fresh In", "Cached", "Out", "Total"].map((h) => (
                       <th key={h} style={{ padding: "6px 12px", color: "#8b949e", textAlign: "left" }}>{h}</th>
                     ))}
                   </tr>
@@ -401,6 +403,7 @@ export default function Dashboard() {
                       <td style={{ padding: "5px 12px", color: "#bc8cff" }}>{r.model}</td>
                       <td style={{ padding: "5px 12px", color: Number(r.statusCode) === 429 ? "#ffa657" : "#8b949e" }}>{r.statusCode}</td>
                       <td style={{ padding: "5px 12px", color: "#8b949e" }}>{fmtInt(r.prompt_tokens)}</td>
+                      <td style={{ padding: "5px 12px", color: "#58a6ff", fontWeight: 600 }}>{fmtInt(r.fresh_prompt_tokens)}</td>
                       <td style={{ padding: "5px 12px", color: "#79c0ff" }}>{fmtInt(r.cached_prompt_tokens)}</td>
                       <td style={{ padding: "5px 12px", color: "#8b949e" }}>{fmtInt(r.output_tokens)}</td>
                       <td style={{ padding: "5px 12px", color: "#58a6ff", fontWeight: 600 }}>{fmtInt(r.total_tokens)}</td>

@@ -210,15 +210,94 @@ In this dashboard, `Calls` tracks gateway requests, not visible button presses.
 - `Cache Create` = cache writes
 - both are separate first-class metrics
 
+## Billing behavior in this setup
+
+This is the important practical question: **what are you actually billed for?**
+
+### OpenAI-style requests in this dashboard
+For OpenAI telemetry in this project:
+- `In` = full prompt tokens sent on the request
+- `Cached` = cached subset of `In`
+- `Fresh In` = `In - Cached`
+- `Out` = completion tokens
+
+Provider billing for OpenAI-style cached requests is typically:
+- fresh input billed at the normal input rate
+- cached input billed at a discounted cached-input rate
+- output billed at the output rate
+
+So you are **not** charged full normal-price input on all `In` tokens when most of them are cached.
+
+You are still billed on the request, but roughly as:
+- `Fresh In × input_rate`
+- `Cached × cached_input_rate`
+- `Out × output_rate`
+
+That means if a row looks like this:
+- `In = 102,051`
+- `Fresh In ≈ 163`
+- `Cached = 101,888`
+- `Out = 1,517`
+
+Then the cost logic should be dominated by:
+- cached-input pricing for the 101,888 cached tokens
+- normal input pricing for only ~163 fresh tokens
+- output pricing for 1,517 output tokens
+
+### Anthropic-style requests in this dashboard
+For Anthropic telemetry:
+- `Fresh In` = newly billed uncached input
+- `Cached` = cache reads
+- `Cache Create` = cache writes
+- `Out` = output
+
+Billing is conceptually:
+- `Fresh In × input_rate`
+- `Cached × cache_read_rate`
+- `Cache Create × cache_write_rate`
+- `Out × output_rate`
+
+### SSE / streaming note
+Streaming does **not** change the underlying billing math.
+
+What streaming changes is only **when** usage becomes visible:
+- usage may arrive in the final usage block / final stream accounting
+- but billing is still based on the provider's token accounting for that request
+
+So:
+- a non-stream JSON response and an SSE response should still represent the same billable token categories
+- the dashboard is normalizing those into one telemetry shape
+
+## Extra explanation from the 10:01–10:04 sample
+
+Sample row:
+- `In 102,051`
+- `Cached 101,888`
+- `Out 1,517`
+- so `Fresh In = 163`
+
+Interpretation:
+- the request sent a very large prompt context
+- nearly all of it was cache-hit
+- only a tiny fraction was fresh prompt text
+- output was moderate
+
+The interleaved `429` rows mean:
+- separate requests hit rate limits
+- those rows count as calls in provider summaries unless filtered out
+- they add zero tokens here, but they still increase request count
+
+That is another reason one visible interaction can look like many calls.
+
 ## Known dashboard issue to fix
 
-The dashboard currently compares different time windows in different sections:
-- some views are "today"
-- some are selected rolling window
+The dashboard previously compared different time windows in different sections:
+- some views were "today"
+- some were selected rolling window
 
-That makes numbers look inconsistent even when telemetry is accurate.
+That made numbers look inconsistent even when telemetry was accurate.
 
-This should be fixed so comparison views use the same selected window.
+A window-alignment fix has now been added so the selected-window usage table can match the selected provider summary window.
 
 ## Presentation-safe summary
 
