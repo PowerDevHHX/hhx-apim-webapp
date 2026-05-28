@@ -23,6 +23,7 @@ function enrichRealtimeRow(r) {
       cacheCreationTokens: cacheCreation,
     }),
     cache_hit_ratio: input > 0 ? cached / input : 0,
+    error_rate: Number(r.error_rate) || 0,
   };
 }
 

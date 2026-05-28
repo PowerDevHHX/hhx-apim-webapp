@@ -8,6 +8,13 @@ app.http('usage-by-model', {
   route: 'usage/by-model',
   handler: async (req, context) => {
     const window = req.query.get('window') || '1mo';
-    return runQueryHandler({ query: byModelQuery(window) }, req, context);
+    return runQueryHandler(
+      {
+        query: byModelQuery(window),
+        transform: (rows) => rows,
+      },
+      req,
+      context
+    );
   },
 });

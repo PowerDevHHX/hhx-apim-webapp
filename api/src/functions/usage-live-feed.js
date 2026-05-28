@@ -27,6 +27,7 @@ function enrichLiveRow(r) {
       cachedPromptTokens: cached,
       cacheCreationTokens: cacheCreation,
     }),
+    error_rate: Number(r.error_rate) || 0,
   };
 }
 

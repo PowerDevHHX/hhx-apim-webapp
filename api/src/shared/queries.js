@@ -203,6 +203,7 @@ ${usageFilterForWindow(windowKey)}
     success_calls         = countif(statusCode >= 200 and statusCode < 300),
     failed_calls          = countif(statusCode < 200 or statusCode >= 300),
     rate_limited_calls    = countif(statusCode == 429),
+    error_rate            = todouble(failed_calls) / todouble(max_of(calls, 1)),
     input_tokens          = sum(promptT),
     output_tokens         = sum(completeT),
     total_tokens          = sum(totalT),

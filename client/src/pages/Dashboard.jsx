@@ -285,18 +285,21 @@ export default function Dashboard() {
                 <tbody>
                   {windowRows.length === 0 ? (
                     <tr>
-                      <td colSpan={13} style={{ padding: "24px 12px", color: "#8b949e", textAlign: "center" }}>
+                      <td colSpan={14} style={{ padding: "24px 12px", color: "#8b949e", textAlign: "center" }}>
                         No usage data yet. This table will populate once the API is connected.
                       </td>
                     </tr>
                   ) : (
-                    windowRows.map((r, i) => (
-                      <tr key={i} style={{ borderBottom: "1px solid #21262d" }}>
+                    windowRows
+                      .filter((r) => Number(r.input_tokens) > 0)
+                      .map((r, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid #21262d" }}>
                         <td style={{ padding: "8px 12px", color: "#f0f6fc" }}>{r.developer}</td>
                         <td style={{ padding: "8px 12px", color: "#bc8cff", fontFamily: "monospace" }}>{r.subscription_name || "—"}</td>
                         <td style={{ padding: "8px 12px", color: "#8b949e", textTransform: "capitalize" }}>{r.provider}</td>
                         <td style={{ padding: "8px 12px", color: "#bc8cff", fontFamily: "monospace" }}>{r.model}</td>
                         <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtInt(r.calls)}</td>
+                        <td style={{ padding: "8px 12px", color: "#f85149" }}>{r.error_rate != null ? fmtPct(r.error_rate) : "—"}</td>
                         <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtInt(r.input_tokens)}</td>
                         <td style={{ padding: "8px 12px", color: "#58a6ff", fontWeight: 600 }}>{fmtInt(r.fresh_prompt_tokens)}</td>
                         <td style={{ padding: "8px 12px", color: "#79c0ff" }}>{fmtInt(r.cached_prompt_tokens)}</td>
