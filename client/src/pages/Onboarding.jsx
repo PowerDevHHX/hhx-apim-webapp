@@ -46,7 +46,8 @@ const GROUP_COLORS = {
   LAB: { bg: "#3a2a1f", color: "#ffa657", border: "#6a4020" },
 };
 
-function userGroup(name = "") {
+function userGroup(value = "") {
+  const name = String(value || "").toUpperCase();
   if (name.includes("AGENT")) return "AGENT";
   if (name.includes("LAB")) return "LAB";
   return "HUMAN";
@@ -135,7 +136,7 @@ export default function Onboarding() {
     setError(null);
     try {
       const r = await axios.get("/api/keys");
-      setKeys(r.data.filter(k => k.id?.startsWith("hhx-")));
+      setKeys(r.data);
     } catch (e) {
       setError(e.response?.data?.error || e.message);
     } finally {
@@ -174,15 +175,21 @@ export default function Onboarding() {
 
   const filtered = keys.filter(k => {
     const dn = k.displayName || "";
-    const g = userGroup(dn);
-    return (filter === "ALL" || g === filter) && (dn.toLowerCase().includes(search.toLowerCase()) || k.id.includes(search.toLowerCase()));
+    const g = userGroup(k.group || dn);
+    const owner = (k.ownerEmail || k.ownerName || "").toLowerCase();
+    const needle = search.toLowerCase();
+    return (filter === "ALL" || g === filter) && (
+      dn.toLowerCase().includes(needle) ||
+      String(k.id || "").toLowerCase().includes(needle) ||
+      owner.includes(needle)
+    );
   });
 
   const counts = {
     ALL: keys.length,
-    HUMAN: keys.filter(k => userGroup(k.displayName) === "HUMAN").length,
-    AGENT: keys.filter(k => userGroup(k.displayName) === "AGENT").length,
-    LAB: keys.filter(k => userGroup(k.displayName) === "LAB").length,
+    HUMAN: keys.filter(k => userGroup(k.group || k.displayName) === "HUMAN").length,
+    AGENT: keys.filter(k => userGroup(k.group || k.displayName) === "AGENT").length,
+    LAB: keys.filter(k => userGroup(k.group || k.displayName) === "LAB").length,
   };
 
   const filterBtn = (f, l) => (
@@ -247,7 +254,7 @@ export default function Onboarding() {
           {filterBtn("LAB", <><FlaskConical size={12} style={{ verticalAlign: "middle", marginRight: 4 }} />Labs</>)}
         </div>
 
-        <input style={{ ...input, marginBottom: 16, maxWidth: 360 }} placeholder="Search by name or subscription ID..." value={search} onChange={e => setSearch(e.target.value)} />
+        <input style={{ ...input, marginBottom: 16, maxWidth: 420 }} placeholder="Search by name, owner, or subscription ID..." value={search} onChange={e => setSearch(e.target.value)} />
 
         {error && <div style={{ color: "#f85149", marginBottom: 12, fontSize: 13 }}>Error: {error}</div>}
 
@@ -263,11 +270,14 @@ export default function Onboarding() {
               </thead>
               <tbody>
                 {filtered.map((k) => {
-                  const g = userGroup(k.displayName);
+                  const g = userGroup(k.group || k.displayName);
                   return (
                     <tr key={k.id} style={{ borderBottom: "1px solid #1c2128" }}>
                       <td style={{ padding: "8px 12px" }}><code style={{ color: "#8b949e", fontSize: 12 }}>{k.id}</code></td>
-                      <td style={{ padding: "8px 12px", color: "#f0f6fc" }}>{k.displayName}</td>
+                      <td style={{ padding: "8px 12px", color: "#f0f6fc" }}>
+                        <div>{k.displayName}</div>
+                        {(k.ownerEmail || k.ownerName) && <div style={{ color: "#8b949e", fontSize: 11, marginTop: 2 }}>{k.ownerEmail || k.ownerName}</div>}
+                      </td>
                       <td style={{ padding: "8px 12px" }}><GroupBadge group={g} /></td>
                       <td style={{ padding: "8px 12px" }}><span style={{ color: k.state === "active" ? "#3fb950" : "#f85149", fontSize: 12 }}>{k.state === "active" ? "● Active" : `● ${k.state}`}</span></td>
                       <td style={{ padding: "8px 12px" }}><KeyReveal subId={k.id} /></td>

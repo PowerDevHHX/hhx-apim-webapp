@@ -93,6 +93,7 @@ ${BASE_USAGE_FILTER}
 `;
 
 // Last 24 hours bucketed into 30-minute slots, one row per developer per slot.
+// Kept for backward compatibility with /api/usage/trend.
 const TREND_24H = `
 ${BASE_USAGE_FILTER}
 | where timestamp > ago(24h)
@@ -100,13 +101,42 @@ ${BASE_USAGE_FILTER}
 | order by timestamp asc
 `;
 
-// Today — per model totals (for the pie chart).
-const BY_MODEL = `
-${BASE_USAGE_FILTER}
-| where timestamp > startofday(now())
+// Bin size paired with each dashboard window so the trend chart has
+// a reasonable number of buckets regardless of window length.
+const TREND_BIN_BY_WINDOW = {
+  '5m': '30s',
+  '30m': '2m',
+  '1h': '5m',
+  '5h': '15m',
+  '8h': '30m',
+  '1d': '1h',
+  '1w': '6h',
+  '1mo': '1d',
+};
+
+function getTrendBin(windowKey = '1d') {
+  return TREND_BIN_BY_WINDOW[windowKey] || '1h';
+}
+
+// Window-aware trend: token burn over time, grouped by either developer or model.
+function trendQuery(windowKey = '1d', groupBy = 'developer') {
+  const bin = getTrendBin(windowKey);
+  const safeGroup = groupBy === 'model' ? 'model' : 'developer';
+  return `
+${usageFilterForWindow(windowKey)}
+| summarize tokens = sum(totalT) by bin(timestamp, ${bin}), ${safeGroup}
+| order by timestamp asc
+`;
+}
+
+// Last 30 days — per model totals for the selected dashboard period.
+function byModelQuery(windowKey = '1mo') {
+  return `
+${usageFilterForWindow(windowKey)}
 | summarize total_tokens = sum(totalT) by model
 | order by total_tokens desc
 `;
+}
 
 // Last 60 minutes — individual request feed.
 const LIVE_FEED = `
@@ -184,4 +214,18 @@ ${usageFilterForWindow(windowKey)}
 `;
 }
 
-module.exports = { DAILY, MONTHLY, REALTIME, TREND_24H, BY_MODEL, LIVE_FEED, usageSummaryQuery, usageRowsByWindowQuery, usageFilterForWindow, getWindowDuration, WINDOWS };
+module.exports = {
+  DAILY,
+  MONTHLY,
+  REALTIME,
+  TREND_24H,
+  LIVE_FEED,
+  usageSummaryQuery,
+  usageRowsByWindowQuery,
+  usageFilterForWindow,
+  getWindowDuration,
+  byModelQuery,
+  trendQuery,
+  getTrendBin,
+  WINDOWS,
+};

@@ -35,7 +35,7 @@ const WINDOWS = [
 
 function StatCard({ label: l, val, sub: s, color = "#f0f6fc" }) {
   return (
-    <div style={{ ...card, flex: 1, minWidth: 160 }}>
+    <div style={{ ...card, flex: 1, minWidth: 160, overflow: "hidden" }}>
       <div style={label}>{l}</div>
       <div style={{ ...value, color }}>{val ?? "—"}</div>
       {s && <div style={sub}>{s}</div>}
@@ -58,6 +58,7 @@ function fmtPct(n) {
 export default function Dashboard() {
   const [tab, setTab] = useState("daily");
   const [selectedWindow, setSelectedWindow] = useState("1d");
+  const [trendGroup, setTrendGroup] = useState("developer");
   const [daily, setDaily] = useState([]);
   const [windowRows, setWindowRows] = useState([]);
   const [monthly, setMonthly] = useState([]);
@@ -79,8 +80,8 @@ export default function Dashboard() {
         axios.get(`/api/usage/window?window=${windowKey}`).then((r) => r.data),
         axios.get("/api/usage/monthly").then((r) => r.data),
         axios.get("/api/usage/realtime").then((r) => r.data),
-        axios.get("/api/usage/trend").then((r) => r.data),
-        axios.get("/api/usage/by-model").then((r) => r.data),
+        axios.get(`/api/usage/trend?window=${windowKey}&groupBy=${trendGroup}`).then((r) => r.data),
+        axios.get(`/api/usage/by-model?window=${windowKey}`).then((r) => r.data),
         axios.get("/api/usage/live-feed").then((r) => r.data),
         axios.get(`/api/usage/summary?window=${windowKey}`).then((r) => r.data),
       ]);
@@ -98,11 +99,11 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [selectedWindow]);
+  }, [selectedWindow, trendGroup]);
 
   useEffect(() => {
     fetchAll(selectedWindow);
-  }, [fetchAll, selectedWindow]);
+  }, [fetchAll, selectedWindow, trendGroup]);
 
   const totalTodayTokens = daily.reduce((a, r) => a + (Number(r.total_tokens) || 0), 0);
   const totalTodayCost = daily.reduce((a, r) => a + (Number(r.est_cost_usd) || 0), 0);
@@ -111,6 +112,7 @@ export default function Dashboard() {
   const uniqueUsers = [...new Set(daily.map((r) => r.developer))].length;
   const realtimeCalls = realtime.reduce((a, r) => a + (Number(r.calls) || 0), 0);
   const summaryTotals = summary?.totals || {};
+  const selectedWindowLabel = WINDOWS.find(([k]) => k === selectedWindow)?.[1] || selectedWindow;
 
   const userWindowTotals = Object.values(
     windowRows.reduce((acc, r) => {
@@ -124,16 +126,23 @@ export default function Dashboard() {
 
   const subscriptionRows = summary.by_subscription || [];
 
+  // Short-range windows show H:MM, longer windows show MM/DD so the X axis stays readable.
+  const trendShowDate = ["1w", "1mo"].includes(selectedWindow);
   const trendRows = trend.reduce((acc, row) => {
-    const key = new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    let item = acc.find((x) => x.time === key);
+    const d = new Date(row.timestamp);
+    const time = trendShowDate
+      ? d.toLocaleDateString([], { month: "2-digit", day: "2-digit" }) + (selectedWindow === "1w" ? " " + d.toLocaleTimeString([], { hour: "2-digit" }) : "")
+      : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    let item = acc.find((x) => x.time === time);
     if (!item) {
-      item = { time: key };
+      item = { time };
       acc.push(item);
     }
-    item[row.developer] = row.tokens;
+    const seriesKey = trendGroup === "model" ? (row.model || "unknown") : (row.developer || "unknown");
+    item[seriesKey] = (item[seriesKey] || 0) + (Number(row.tokens) || 0);
     return acc;
   }, []);
+  const trendSeries = [...new Set(trend.map((t) => (trendGroup === "model" ? t.model : t.developer)).filter(Boolean))];
 
   const tabBtn = (t, l) => (
     <button
@@ -190,15 +199,15 @@ export default function Dashboard() {
       </div>
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>
-        <StatCard label="Window Tokens" val={fmtInt(summaryTotals.total_tokens)} sub={`Aggregate for ${WINDOWS.find(([k]) => k === selectedWindow)?.[1] || selectedWindow}`} />
-        <StatCard label="Window Cost" val={fmtUsd(summaryTotals.est_cost_usd)} color="#3fb950" sub="Provider-aware cache pricing" />
-        <StatCard label="Window Calls" val={fmtInt(summaryTotals.calls)} sub={`${fmtInt(summaryTotals.success_calls)} success · ${fmtInt(summaryTotals.rate_limited_calls)} rate-limited`} />
-        <StatCard label="Cache Hit Ratio" val={fmtPct(summaryTotals.cache_hit_ratio)} color="#79c0ff" sub="cachedPromptTokens / promptTokens" />
-        <StatCard label="Today Tokens" val={fmtInt(totalTodayTokens)} sub="UTC day-to-date" />
-        <StatCard label="Month Cost" val={fmtUsd(totalMonthCost, 2)} color="#ffa657" sub="UTC calendar month" />
-        <StatCard label="Today Active Users" val={uniqueUsers} sub="With usage today" />
+        <StatCard label={`${selectedWindowLabel} Tokens`} val={fmtInt(summaryTotals.total_tokens)} sub={`Aggregate over the selected ${selectedWindowLabel.toLowerCase()} window`} />
+        <StatCard label={`${selectedWindowLabel} Cost`} val={fmtUsd(summaryTotals.est_cost_usd)} color="#3fb950" sub="Estimated spend over the selected window" />
+        <StatCard label={`${selectedWindowLabel} Calls`} val={fmtInt(summaryTotals.calls)} sub={`${fmtInt(summaryTotals.success_calls)} success · ${fmtInt(summaryTotals.rate_limited_calls)} rate-limited`} />
+        <StatCard label="Cache Hit Ratio" val={fmtPct(summaryTotals.cache_hit_ratio)} color="#79c0ff" sub="cached prompt tokens / total prompt tokens" />
+        <StatCard label="Today Tokens" val={fmtInt(totalTodayTokens)} sub="UTC day-to-date, all users/models" />
+        <StatCard label="Month Cost" val={fmtUsd(totalMonthCost, 2)} color="#ffa657" sub="Estimated spend UTC month-to-date" />
+        <StatCard label="Today Active Users" val={uniqueUsers} sub="Distinct users with calls today" />
         <StatCard label="Active API Keys" val={fmtInt(summaryTotals.active_subscriptions)} color="#bc8cff" sub="Distinct APIM subscriptions in window" />
-        <StatCard label="Real-time (5min)" val={realtimeCalls} color="#58a6ff" sub="Calls in last 5 min" />
+        <StatCard label="Real-time (5 min)" val={realtimeCalls} color="#58a6ff" sub="Calls in the last 5 minutes" />
       </div>
 
       <div style={{ ...card, paddingTop: 16 }}>
@@ -238,7 +247,7 @@ export default function Dashboard() {
         {tabBtn("daily", <><CalendarSearch size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />Today by User/Model</>)}
         {tabBtn("keys", <><KeyRound size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />By API Key</>)}
         {tabBtn("model", <><Brain size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />By Model</>)}
-        {tabBtn("trend", <><ChartLine size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />24h Trend</>)}
+        {tabBtn("trend", <><ChartLine size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />Trend</>)}
         {tabBtn("realtime", <><Clock size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />Real-time</>)}
         {tabBtn("feed", <><Radio size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />Live Feed</>)}
       </div>
@@ -354,12 +363,12 @@ export default function Dashboard() {
 
       {tab === "model" && (
         <div style={card}>
-          <div style={{ ...label, marginBottom: 16 }}>Today's Usage by Model</div>
+          <div style={{ ...label, marginBottom: 16 }}>Usage by Model — {selectedWindowLabel}</div>
           {byModel.length === 0 ? (
-            <div style={{ color: "#8b949e", fontSize: 13 }}>No model usage data yet.</div>
+            <div style={{ color: "#8b949e", fontSize: 13 }}>No model usage data in this window yet.</div>
           ) : (
-            <div style={{ display: "flex", gap: 40, flexWrap: "wrap", alignItems: "center" }}>
-              <PieChart width={300} height={260}>
+            <div style={{ display: "flex", gap: 40, flexWrap: "wrap", alignItems: "flex-start" }}>
+              <PieChart width={320} height={280}>
                 <Pie data={byModel} dataKey="total_tokens" nameKey="model" cx="50%" cy="50%" outerRadius={100} label={({ name }) => name}>
                   {byModel.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
@@ -370,6 +379,29 @@ export default function Dashboard() {
                   labelStyle={{ color: "#f0f6fc" }}
                 />
               </PieChart>
+              <div style={{ flex: 1, minWidth: 320, overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #30363d" }}>
+                      {["Model", "Tokens", "Share"].map((h) => (
+                        <th key={h} style={{ textAlign: "left", padding: "8px 12px", color: "#8b949e", fontWeight: 500 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const sum = byModel.reduce((a, r) => a + (Number(r.total_tokens) || 0), 0) || 1;
+                      return byModel.map((r, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid #21262d" }}>
+                          <td style={{ padding: "8px 12px", color: "#bc8cff", fontFamily: "monospace" }}>{r.model || "unknown"}</td>
+                          <td style={{ padding: "8px 12px", color: "#f0f6fc", fontWeight: 600 }}>{fmtInt(r.total_tokens)}</td>
+                          <td style={{ padding: "8px 12px", color: "#8b949e" }}>{((Number(r.total_tokens) || 0) * 100 / sum).toFixed(1)}%</td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -377,9 +409,29 @@ export default function Dashboard() {
 
       {tab === "trend" && (
         <div style={card}>
-          <div style={{ ...label, marginBottom: 16 }}>Token Burn Rate — Last 24 Hours</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+            <div style={label}>Token Burn Rate — {selectedWindowLabel}</div>
+            <div style={{ display: "flex", gap: 4, background: "#0d1117", padding: 4, borderRadius: 8 }}>
+              {[["developer", "By User"], ["model", "By Model"]].map(([k, l]) => (
+                <button
+                  key={k}
+                  onClick={() => setTrendGroup(k)}
+                  style={{
+                    padding: "5px 12px",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    fontSize: 12,
+                    background: trendGroup === k ? "#21262d" : "transparent",
+                    color: trendGroup === k ? "#f0f6fc" : "#8b949e",
+                    fontWeight: trendGroup === k ? 600 : 400,
+                  }}
+                >{l}</button>
+              ))}
+            </div>
+          </div>
           {trendRows.length === 0 ? (
-            <div style={{ color: "#8b949e", fontSize: 13 }}>No trend data yet.</div>
+            <div style={{ color: "#8b949e", fontSize: 13 }}>No trend data for this window yet.</div>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={trendRows}>
@@ -388,8 +440,8 @@ export default function Dashboard() {
                 <YAxis tick={{ fill: "#8b949e", fontSize: 11 }} />
                 <Tooltip contentStyle={{ background: "#161b22", border: "1px solid #30363d" }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                {[...new Set(trend.map((t) => t.developer))].map((dev, i) => (
-                  <Line key={dev} type="monotone" dataKey={dev} stroke={COLORS[i % COLORS.length]} dot={false} strokeWidth={2} />
+                {trendSeries.map((name, i) => (
+                  <Line key={name} type="monotone" dataKey={name} stroke={COLORS[i % COLORS.length]} dot={false} strokeWidth={2} />
                 ))}
               </LineChart>
             </ResponsiveContainer>
