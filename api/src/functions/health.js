@@ -1,4 +1,5 @@
 const { app } = require('@azure/functions');
+const { isAuthConfigured } = require('../shared/auth');
 
 app.http('health', {
   methods: ['GET'],
@@ -6,6 +7,9 @@ app.http('health', {
   route: 'health',
   handler: async () => ({
     status: 200,
+    headers: {
+      'Cache-Control': 'no-store',
+    },
     jsonBody: {
       ok: true,
       service: 'apim-hhx-gateway-api',
@@ -13,6 +17,7 @@ app.http('health', {
       appInsightsConfigured: Boolean(
         process.env.APPINSIGHTS_APP_ID && process.env.APPINSIGHTS_API_KEY
       ),
+      authConfigured: isAuthConfigured(),
     },
   }),
 });

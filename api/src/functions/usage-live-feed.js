@@ -6,5 +6,5 @@ app.http('usage-live-feed', {
   methods: ['GET'],
   authLevel: 'anonymous',
   route: 'usage/live-feed',
-  handler: async (_req, context) => runQueryHandler({ query: LIVE_FEED }, context),
+  handler: async (req, context) => runQueryHandler({ query: LIVE_FEED }, req, context),
 });

@@ -29,12 +29,13 @@ app.http('usage-monthly', {
   methods: ['GET'],
   authLevel: 'anonymous',
   route: 'usage/monthly',
-  handler: async (_req, context) =>
+  handler: async (req, context) =>
     runQueryHandler(
       {
         query: MONTHLY,
         transform: enrichUsageRow,
       },
+      req,
       context
     ),
 });

@@ -29,12 +29,13 @@ app.http('usage-daily', {
   methods: ['GET'],
   authLevel: 'anonymous',
   route: 'usage/daily',
-  handler: async (_req, context) =>
+  handler: async (req, context) =>
     runQueryHandler(
       {
         query: DAILY,
         transform: enrichUsageRow,
       },
+      req,
       context
     ),
 });

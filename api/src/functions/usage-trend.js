@@ -6,5 +6,5 @@ app.http('usage-trend', {
   methods: ['GET'],
   authLevel: 'anonymous',
   route: 'usage/trend',
-  handler: async (_req, context) => runQueryHandler({ query: TREND_24H }, context),
+  handler: async (req, context) => runQueryHandler({ query: TREND_24H }, req, context),
 });

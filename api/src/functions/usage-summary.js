@@ -79,6 +79,7 @@ app.http('usage-summary', {
           };
         },
       },
+      req,
       context
     );
   },

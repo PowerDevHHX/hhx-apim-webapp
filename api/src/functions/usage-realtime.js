@@ -6,5 +6,5 @@ app.http('usage-realtime', {
   methods: ['GET'],
   authLevel: 'anonymous',
   route: 'usage/realtime',
-  handler: async (_req, context) => runQueryHandler({ query: REALTIME }, context),
+  handler: async (req, context) => runQueryHandler({ query: REALTIME }, req, context),
 });

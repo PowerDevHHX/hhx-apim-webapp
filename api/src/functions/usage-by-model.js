@@ -6,5 +6,5 @@ app.http('usage-by-model', {
   methods: ['GET'],
   authLevel: 'anonymous',
   route: 'usage/by-model',
-  handler: async (_req, context) => runQueryHandler({ query: BY_MODEL }, context),
+  handler: async (req, context) => runQueryHandler({ query: BY_MODEL }, req, context),
 });
