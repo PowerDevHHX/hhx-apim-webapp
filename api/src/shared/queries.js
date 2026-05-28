@@ -17,6 +17,7 @@ customEvents
 | where name == "AIUsage"
 | extend
     developerRaw = tostring(customDimensions.developer),
+    subscriptionRaw = tostring(customDimensions.subscriptionName),
     provider  = tostring(customDimensions.provider),
     model     = tostring(customDimensions.model),
     statusCode = toint(customDimensions.statusCode),
@@ -29,11 +30,12 @@ customEvents
     cachedPromptT = toint(customMeasurements.cachedPromptTokens),
     cacheCreationT = toint(customMeasurements.cacheCreationTokens)
 | extend
-    developer = iff(isempty(trim(' ', developerRaw)), "unknown", developerRaw)
+    developer = iff(isempty(trim(' ', developerRaw)), "unknown", developerRaw),
+    subscription_name = iff(isempty(trim(' ', subscriptionRaw)), "unknown", subscriptionRaw)
 | where developer != "drew@manual"
 `;
 
-// Today (UTC) — per user / per model aggregates.
+// Today (UTC) — per user / per subscription / per model aggregates.
 const DAILY = `
 ${BASE_USAGE_FILTER}
 | where timestamp > startofday(now())
@@ -48,11 +50,11 @@ ${BASE_USAGE_FILTER}
     fresh_prompt_tokens   = sum(freshPromptT),
     cached_prompt_tokens  = sum(cachedPromptT),
     cache_creation_tokens = sum(cacheCreationT)
-  by developer, provider, model
+  by developer, subscription_name, provider, model
 | order by total_tokens desc
 `;
 
-// This calendar month (UTC) — per user / per model aggregates.
+// This calendar month (UTC) — per user / per subscription / per model aggregates.
 const MONTHLY = `
 ${BASE_USAGE_FILTER}
 | where timestamp >= startofmonth(now())
@@ -67,11 +69,11 @@ ${BASE_USAGE_FILTER}
     fresh_prompt_tokens   = sum(freshPromptT),
     cached_prompt_tokens  = sum(cachedPromptT),
     cache_creation_tokens = sum(cacheCreationT)
-  by developer, provider, model
+  by developer, subscription_name, provider, model
 | order by total_tokens desc
 `;
 
-// Last 5 minutes — per user / per model.
+// Last 5 minutes — per user / per subscription / per model.
 const REALTIME = `
 ${BASE_USAGE_FILTER}
 | where timestamp > ago(5m)
@@ -86,7 +88,7 @@ ${BASE_USAGE_FILTER}
     fresh_prompt_tokens   = sum(freshPromptT),
     cached_prompt_tokens  = sum(cachedPromptT),
     cache_creation_tokens = sum(cacheCreationT)
-  by developer, provider, model
+  by developer, subscription_name, provider, model
 | order by calls desc
 `;
 
@@ -110,7 +112,7 @@ ${BASE_USAGE_FILTER}
 const LIVE_FEED = `
 ${BASE_USAGE_FILTER}
 | where timestamp > ago(60m)
-| project timestamp, developer, provider, model, statusCode, isStream, responseId,
+| project timestamp, developer, subscription_name, provider, model, statusCode, isStream, responseId,
           prompt_tokens=promptT, output_tokens=completeT, total_tokens=totalT,
           fresh_prompt_tokens=freshPromptT, cached_prompt_tokens=cachedPromptT,
           cache_creation_tokens=cacheCreationT
@@ -150,6 +152,7 @@ ${usageFilterForWindow(windowKey)}
     failed_calls          = countif(statusCode < 200 or statusCode >= 300),
     rate_limited_calls    = countif(statusCode == 429),
     active_users          = dcount(developer),
+    active_subscriptions  = dcount(subscription_name),
     active_models         = dcount(model),
     input_tokens          = sum(promptT),
     output_tokens         = sum(completeT),
@@ -176,7 +179,7 @@ ${usageFilterForWindow(windowKey)}
     fresh_prompt_tokens   = sum(freshPromptT),
     cached_prompt_tokens  = sum(cachedPromptT),
     cache_creation_tokens = sum(cacheCreationT)
-  by developer, provider, model
+  by developer, subscription_name, provider, model
 | order by total_tokens desc
 `;
 }

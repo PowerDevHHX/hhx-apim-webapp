@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Brain, CalendarSearch, ChartLine, Clock, Radio } from "lucide-react";
+import { Brain, CalendarSearch, ChartLine, Clock, KeyRound, Radio } from "lucide-react";
 import axios from "axios";
 import {
   BarChart,
@@ -122,6 +122,8 @@ export default function Dashboard() {
     }, {})
   ).sort((a, b) => b.total_tokens - a.total_tokens);
 
+  const subscriptionRows = summary.by_subscription || [];
+
   const trendRows = trend.reduce((acc, row) => {
     const key = new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     let item = acc.find((x) => x.time === key);
@@ -195,6 +197,7 @@ export default function Dashboard() {
         <StatCard label="Today Tokens" val={fmtInt(totalTodayTokens)} sub="UTC day-to-date" />
         <StatCard label="Month Cost" val={fmtUsd(totalMonthCost, 2)} color="#ffa657" sub="UTC calendar month" />
         <StatCard label="Today Active Users" val={uniqueUsers} sub="With usage today" />
+        <StatCard label="Active API Keys" val={fmtInt(summaryTotals.active_subscriptions)} color="#bc8cff" sub="Distinct APIM subscriptions in window" />
         <StatCard label="Real-time (5min)" val={realtimeCalls} color="#58a6ff" sub="Calls in last 5 min" />
       </div>
 
@@ -233,6 +236,7 @@ export default function Dashboard() {
 
       <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "#161b22", padding: 6, borderRadius: 10, width: "fit-content" }}>
         {tabBtn("daily", <><CalendarSearch size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />Today by User/Model</>)}
+        {tabBtn("keys", <><KeyRound size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />By API Key</>)}
         {tabBtn("model", <><Brain size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />By Model</>)}
         {tabBtn("trend", <><ChartLine size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />24h Trend</>)}
         {tabBtn("realtime", <><Clock size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />Real-time</>)}
@@ -259,12 +263,12 @@ export default function Dashboard() {
           </div>
 
           <div style={card}>
-            <div style={{ ...label, marginBottom: 16 }}>Selected Window — Usage by User / Model</div>
+            <div style={{ ...label, marginBottom: 16 }}>Selected Window — Usage by User / API Key / Model</div>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #30363d" }}>
-                    {["User", "Provider", "Model", "Calls", "Input", "Fresh In", "Cached", "Cache Create", "Output", "Total", "Cache Hit", "Est. Cost"].map((h) => (
+                    {["User", "API Key", "Provider", "Model", "Calls", "Input", "Fresh In", "Cached", "Cache Create", "Output", "Total", "Cache Hit", "Est. Cost"].map((h) => (
                       <th key={h} style={{ textAlign: "left", padding: "8px 12px", color: "#8b949e", fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
@@ -272,7 +276,7 @@ export default function Dashboard() {
                 <tbody>
                   {windowRows.length === 0 ? (
                     <tr>
-                      <td colSpan={12} style={{ padding: "24px 12px", color: "#8b949e", textAlign: "center" }}>
+                      <td colSpan={13} style={{ padding: "24px 12px", color: "#8b949e", textAlign: "center" }}>
                         No usage data yet. This table will populate once the API is connected.
                       </td>
                     </tr>
@@ -280,6 +284,7 @@ export default function Dashboard() {
                     windowRows.map((r, i) => (
                       <tr key={i} style={{ borderBottom: "1px solid #21262d" }}>
                         <td style={{ padding: "8px 12px", color: "#f0f6fc" }}>{r.developer}</td>
+                        <td style={{ padding: "8px 12px", color: "#bc8cff", fontFamily: "monospace" }}>{r.subscription_name || "—"}</td>
                         <td style={{ padding: "8px 12px", color: "#8b949e", textTransform: "capitalize" }}>{r.provider}</td>
                         <td style={{ padding: "8px 12px", color: "#bc8cff", fontFamily: "monospace" }}>{r.model}</td>
                         <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtInt(r.calls)}</td>
@@ -299,6 +304,52 @@ export default function Dashboard() {
             </div>
           </div>
         </>
+      )}
+
+      {tab === "keys" && (
+        <div style={card}>
+          <div style={{ ...label, marginBottom: 16 }}>Selected Window — Usage by API Key (APIM Subscription)</div>
+          <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 12 }}>
+            APIM subscription = the key handed out. Owner is the APIM developer the key belongs to.
+            One owner can have many keys; this breakdown is per individual key.
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #30363d" }}>
+                  {["API Key", "Owner", "Providers", "Models", "Calls", "Fresh In", "Cached", "Output", "Total", "Cache Hit", "Est. Cost"].map((h) => (
+                    <th key={h} style={{ textAlign: "left", padding: "8px 12px", color: "#8b949e", fontWeight: 500 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {subscriptionRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} style={{ padding: "24px 12px", color: "#8b949e", textAlign: "center" }}>
+                      No per-key usage yet in this window.
+                    </td>
+                  </tr>
+                ) : (
+                  subscriptionRows.map((s, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid #21262d" }}>
+                      <td style={{ padding: "8px 12px", color: "#bc8cff", fontFamily: "monospace", fontWeight: 600 }}>{s.subscription_name}</td>
+                      <td style={{ padding: "8px 12px", color: "#f0f6fc" }}>{s.owner || "unknown"}</td>
+                      <td style={{ padding: "8px 12px", color: "#8b949e", textTransform: "capitalize" }}>{(s.providers || []).join(", ")}</td>
+                      <td style={{ padding: "8px 12px", color: "#8b949e", fontFamily: "monospace", fontSize: 12 }}>{(s.models || []).join(", ") || "—"}</td>
+                      <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtInt(s.calls)}</td>
+                      <td style={{ padding: "8px 12px", color: "#58a6ff", fontWeight: 600 }}>{fmtInt(s.fresh_prompt_tokens)}</td>
+                      <td style={{ padding: "8px 12px", color: "#79c0ff" }}>{fmtInt(s.cached_prompt_tokens)}</td>
+                      <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtInt(s.output_tokens)}</td>
+                      <td style={{ padding: "8px 12px", color: "#f0f6fc", fontWeight: 600 }}>{fmtInt(s.total_tokens)}</td>
+                      <td style={{ padding: "8px 12px", color: "#8b949e" }}>{fmtPct(s.cache_hit_ratio)}</td>
+                      <td style={{ padding: "8px 12px", color: "#3fb950", fontWeight: 600 }}>{fmtUsd(s.est_cost_usd)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {tab === "model" && (
@@ -355,7 +406,7 @@ export default function Dashboard() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #30363d" }}>
-                  {["User", "Provider", "Model", "Calls", "Input", "Fresh In", "Cached", "Output"].map((h) => (
+                  {["User", "API Key", "Provider", "Model", "Calls", "Input", "Fresh In", "Cached", "Output"].map((h) => (
                     <th key={h} style={{ padding: "8px 12px", color: "#8b949e", textAlign: "left" }}>{h}</th>
                   ))}
                 </tr>
@@ -364,6 +415,7 @@ export default function Dashboard() {
                 {realtime.map((r, i) => (
                   <tr key={i} style={{ borderBottom: "1px solid #21262d" }}>
                     <td style={{ padding: "8px 12px", color: "#f0f6fc" }}>{r.developer}</td>
+                    <td style={{ padding: "8px 12px", color: "#bc8cff", fontFamily: "monospace" }}>{r.subscription_name || "—"}</td>
                     <td style={{ padding: "8px 12px", color: "#8b949e", textTransform: "capitalize" }}>{r.provider}</td>
                     <td style={{ padding: "8px 12px", color: "#bc8cff", fontFamily: "monospace" }}>{r.model}</td>
                     <td style={{ padding: "8px 12px", color: "#58a6ff", fontWeight: 600 }}>{fmtInt(r.calls)}</td>
@@ -389,7 +441,7 @@ export default function Dashboard() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "monospace" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #30363d" }}>
-                    {["Time", "User", "Provider", "Model", "Status", "In", "Fresh In", "Cached", "Out", "Total"].map((h) => (
+                    {["Time", "User", "API Key", "Provider", "Model", "Status", "In", "Fresh In", "Cached", "Out", "Total"].map((h) => (
                       <th key={h} style={{ padding: "6px 12px", color: "#8b949e", textAlign: "left" }}>{h}</th>
                     ))}
                   </tr>
@@ -399,6 +451,7 @@ export default function Dashboard() {
                     <tr key={i} style={{ borderBottom: "1px solid #1c2128" }}>
                       <td style={{ padding: "5px 12px", color: "#8b949e" }}>{new Date(r.timestamp).toLocaleTimeString()}</td>
                       <td style={{ padding: "5px 12px", color: "#f0f6fc" }}>{r.developer}</td>
+                      <td style={{ padding: "5px 12px", color: "#bc8cff" }}>{r.subscription_name || "—"}</td>
                       <td style={{ padding: "5px 12px", color: "#8b949e", textTransform: "capitalize" }}>{r.provider}</td>
                       <td style={{ padding: "5px 12px", color: "#bc8cff" }}>{r.model}</td>
                       <td style={{ padding: "5px 12px", color: Number(r.statusCode) === 429 ? "#ffa657" : "#8b949e" }}>{r.statusCode}</td>

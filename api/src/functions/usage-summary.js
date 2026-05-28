@@ -45,6 +45,7 @@ function buildSummary(modelRows, window) {
         failed_calls: 0,
         rate_limited_calls: 0,
         active_users: new Set(),
+        active_subscriptions: new Set(),
         active_models: new Set(),
         input_tokens: 0,
         output_tokens: 0,
@@ -61,6 +62,7 @@ function buildSummary(modelRows, window) {
     p.failed_calls += Number(r.failed_calls) || 0;
     p.rate_limited_calls += Number(r.rate_limited_calls) || 0;
     if (r.developer) p.active_users.add(r.developer);
+    if (r.subscription_name) p.active_subscriptions.add(r.subscription_name);
     if (r.model) p.active_models.add(r.model);
     p.input_tokens += Number(r.input_tokens) || 0;
     p.output_tokens += Number(r.output_tokens) || 0;
@@ -75,6 +77,7 @@ function buildSummary(modelRows, window) {
   const providerRows = Object.values(byProvider).map((p) => ({
     ...p,
     active_users: p.active_users.size,
+    active_subscriptions: p.active_subscriptions.size,
     active_models: p.active_models.size,
     cache_hit_ratio: p.input_tokens > 0 ? p.cached_prompt_tokens / p.input_tokens : 0,
   }));
@@ -82,11 +85,66 @@ function buildSummary(modelRows, window) {
 
   // Grand totals
   const allUsers = new Set();
+  const allSubs = new Set();
   const allModels = new Set();
   for (const r of modelRows) {
     if (r.developer) allUsers.add(r.developer);
+    if (r.subscription_name) allSubs.add(r.subscription_name);
     if (r.model) allModels.add(r.model);
   }
+
+  // Roll up per-subscription totals too (across providers/models),
+  // so the dashboard can show a "by API key" leaderboard without re-querying.
+  const bySubMap = {};
+  for (const r of modelRows) {
+    const sub = r.subscription_name || 'unknown';
+    if (!bySubMap[sub]) {
+      bySubMap[sub] = {
+        subscription_name: sub,
+        developers: new Set(),
+        providers: new Set(),
+        models: new Set(),
+        calls: 0,
+        success_calls: 0,
+        failed_calls: 0,
+        rate_limited_calls: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0,
+        fresh_prompt_tokens: 0,
+        cached_prompt_tokens: 0,
+        cache_creation_tokens: 0,
+        est_cost_usd: 0,
+      };
+    }
+    const s = bySubMap[sub];
+    if (r.developer) s.developers.add(r.developer);
+    if (r.provider) s.providers.add(r.provider);
+    if (r.model) s.models.add(r.model);
+    s.calls += Number(r.calls) || 0;
+    s.success_calls += Number(r.success_calls) || 0;
+    s.failed_calls += Number(r.failed_calls) || 0;
+    s.rate_limited_calls += Number(r.rate_limited_calls) || 0;
+    s.input_tokens += Number(r.input_tokens) || 0;
+    s.output_tokens += Number(r.output_tokens) || 0;
+    s.total_tokens += Number(r.total_tokens) || 0;
+    s.fresh_prompt_tokens += Number(r.fresh_prompt_tokens) || 0;
+    s.cached_prompt_tokens += Number(r.cached_prompt_tokens) || 0;
+    s.cache_creation_tokens += Number(r.cache_creation_tokens) || 0;
+    s.est_cost_usd += Number(r.est_cost_usd) || 0;
+  }
+  const bySubscription = Object.values(bySubMap)
+    .map((s) => ({
+      ...s,
+      // Owner is the developer behind the key. If a key somehow shows up
+      // against multiple developer identities, join them.
+      owner: Array.from(s.developers).sort().join(', '),
+      developers: Array.from(s.developers).sort(),
+      providers: Array.from(s.providers).sort(),
+      models: Array.from(s.models).sort(),
+      cache_hit_ratio: s.input_tokens > 0 ? s.cached_prompt_tokens / s.input_tokens : 0,
+    }))
+    .sort((a, b) => b.total_tokens - a.total_tokens);
 
   const totals = providerRows.reduce(
     (acc, row) => {
@@ -109,6 +167,7 @@ function buildSummary(modelRows, window) {
       failed_calls: 0,
       rate_limited_calls: 0,
       active_users: allUsers.size,
+      active_subscriptions: allSubs.size,
       active_models: allModels.size,
       input_tokens: 0,
       output_tokens: 0,
@@ -121,7 +180,7 @@ function buildSummary(modelRows, window) {
   );
   totals.cache_hit_ratio = totals.input_tokens > 0 ? totals.cached_prompt_tokens / totals.input_tokens : 0;
 
-  return { window, totals, by_provider: providerRows };
+  return { window, totals, by_provider: providerRows, by_subscription: bySubscription };
 }
 
 app.http('usage-summary', {
