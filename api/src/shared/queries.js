@@ -129,11 +129,21 @@ const WINDOWS = {
   '1mo': '30d',
 };
 
-function usageSummaryQuery(windowKey = '1d') {
-  const duration = WINDOWS[windowKey] || WINDOWS['1d'];
+function getWindowDuration(windowKey = '1d') {
+  return WINDOWS[windowKey] || WINDOWS['1d'];
+}
+
+function usageFilterForWindow(windowKey = '1d') {
+  const duration = getWindowDuration(windowKey);
   return `
 ${BASE_USAGE_FILTER}
 | where timestamp > ago(${duration})
+`;
+}
+
+function usageSummaryQuery(windowKey = '1d') {
+  return `
+${usageFilterForWindow(windowKey)}
 | summarize
     calls                 = count(),
     success_calls         = countif(statusCode >= 200 and statusCode < 300),
@@ -152,4 +162,23 @@ ${BASE_USAGE_FILTER}
 `;
 }
 
-module.exports = { DAILY, MONTHLY, REALTIME, TREND_24H, BY_MODEL, LIVE_FEED, usageSummaryQuery, WINDOWS };
+function usageRowsByWindowQuery(windowKey = '1d') {
+  return `
+${usageFilterForWindow(windowKey)}
+| summarize
+    calls                 = count(),
+    success_calls         = countif(statusCode >= 200 and statusCode < 300),
+    failed_calls          = countif(statusCode < 200 or statusCode >= 300),
+    rate_limited_calls    = countif(statusCode == 429),
+    input_tokens          = sum(promptT),
+    output_tokens         = sum(completeT),
+    total_tokens          = sum(totalT),
+    fresh_prompt_tokens   = sum(freshPromptT),
+    cached_prompt_tokens  = sum(cachedPromptT),
+    cache_creation_tokens = sum(cacheCreationT)
+  by developer, provider, model
+| order by total_tokens desc
+`;
+}
+
+module.exports = { DAILY, MONTHLY, REALTIME, TREND_24H, BY_MODEL, LIVE_FEED, usageSummaryQuery, usageRowsByWindowQuery, usageFilterForWindow, getWindowDuration, WINDOWS };

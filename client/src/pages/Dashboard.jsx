@@ -59,6 +59,7 @@ export default function Dashboard() {
   const [tab, setTab] = useState("daily");
   const [selectedWindow, setSelectedWindow] = useState("1d");
   const [daily, setDaily] = useState([]);
+  const [windowRows, setWindowRows] = useState([]);
   const [monthly, setMonthly] = useState([]);
   const [realtime, setRealtime] = useState([]);
   const [trend, setTrend] = useState([]);
@@ -73,8 +74,9 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [d, m, rt, tr, bm, lf, sum] = await Promise.all([
+      const [d, w, m, rt, tr, bm, lf, sum] = await Promise.all([
         axios.get("/api/usage/daily").then((r) => r.data),
+        axios.get(`/api/usage/window?window=${windowKey}`).then((r) => r.data),
         axios.get("/api/usage/monthly").then((r) => r.data),
         axios.get("/api/usage/realtime").then((r) => r.data),
         axios.get("/api/usage/trend").then((r) => r.data),
@@ -83,6 +85,7 @@ export default function Dashboard() {
         axios.get(`/api/usage/summary?window=${windowKey}`).then((r) => r.data),
       ]);
       setDaily(d || []);
+      setWindowRows(w?.rows || []);
       setMonthly(m || []);
       setRealtime(rt || []);
       setTrend(tr || []);
@@ -109,8 +112,8 @@ export default function Dashboard() {
   const realtimeCalls = realtime.reduce((a, r) => a + (Number(r.calls) || 0), 0);
   const summaryTotals = summary?.totals || {};
 
-  const userDailyTotals = Object.values(
-    daily.reduce((acc, r) => {
+  const userWindowTotals = Object.values(
+    windowRows.reduce((acc, r) => {
       const dev = r.developer || "unknown";
       if (!acc[dev]) acc[dev] = { developer: dev, total_tokens: 0, est_cost_usd: 0 };
       acc[dev].total_tokens += Number(r.total_tokens) || 0;
@@ -189,9 +192,9 @@ export default function Dashboard() {
         <StatCard label="Window Cost" val={fmtUsd(summaryTotals.est_cost_usd)} color="#3fb950" sub="Provider-aware cache pricing" />
         <StatCard label="Window Calls" val={fmtInt(summaryTotals.calls)} sub={`${fmtInt(summaryTotals.success_calls)} success · ${fmtInt(summaryTotals.rate_limited_calls)} rate-limited`} />
         <StatCard label="Cache Hit Ratio" val={fmtPct(summaryTotals.cache_hit_ratio)} color="#79c0ff" sub="cachedPromptTokens / promptTokens" />
-        <StatCard label="Today's Tokens" val={fmtInt(totalTodayTokens)} sub="All users combined" />
-        <StatCard label="Monthly Cost" val={fmtUsd(totalMonthCost, 2)} color="#ffa657" sub="Calendar month" />
-        <StatCard label="Active Users" val={uniqueUsers} sub="With usage today" />
+        <StatCard label="Today Tokens" val={fmtInt(totalTodayTokens)} sub="UTC day-to-date" />
+        <StatCard label="Month Cost" val={fmtUsd(totalMonthCost, 2)} color="#ffa657" sub="UTC calendar month" />
+        <StatCard label="Today Active Users" val={uniqueUsers} sub="With usage today" />
         <StatCard label="Real-time (5min)" val={realtimeCalls} color="#58a6ff" sub="Calls in last 5 min" />
       </div>
 
@@ -239,12 +242,12 @@ export default function Dashboard() {
       {tab === "daily" && (
         <>
           <div style={card}>
-            <div style={{ ...label, marginBottom: 16 }}>Today's Token Usage by User</div>
-            {userDailyTotals.length === 0 ? (
+            <div style={{ ...label, marginBottom: 16 }}>Selected Window Token Usage by User</div>
+            {userWindowTotals.length === 0 ? (
               <div style={{ color: "#8b949e", fontSize: 13 }}>No usage data yet. Connect metrics to populate this chart.</div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={userDailyTotals} margin={{ left: 16 }}>
+                <BarChart data={userWindowTotals} margin={{ left: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
                   <XAxis dataKey="developer" tick={{ fill: "#8b949e", fontSize: 11 }} angle={-25} textAnchor="end" height={60} />
                   <YAxis tick={{ fill: "#8b949e", fontSize: 11 }} />
@@ -256,7 +259,7 @@ export default function Dashboard() {
           </div>
 
           <div style={card}>
-            <div style={{ ...label, marginBottom: 16 }}>Today — Usage by User / Model</div>
+            <div style={{ ...label, marginBottom: 16 }}>Selected Window — Usage by User / Model</div>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
@@ -267,14 +270,14 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {daily.length === 0 ? (
+                  {windowRows.length === 0 ? (
                     <tr>
                       <td colSpan={11} style={{ padding: "24px 12px", color: "#8b949e", textAlign: "center" }}>
                         No usage data yet. This table will populate once the API is connected.
                       </td>
                     </tr>
                   ) : (
-                    daily.map((r, i) => (
+                    windowRows.map((r, i) => (
                       <tr key={i} style={{ borderBottom: "1px solid #21262d" }}>
                         <td style={{ padding: "8px 12px", color: "#f0f6fc" }}>{r.developer}</td>
                         <td style={{ padding: "8px 12px", color: "#8b949e", textTransform: "capitalize" }}>{r.provider}</td>

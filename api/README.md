@@ -13,6 +13,7 @@ Application Insights (`hhx-api-insights`) and returns aggregated JSON.
 | POST | `/api/auth/logout` | clears session cookie |
 | GET | `/api/usage/daily` | today (UTC) by developer + model |
 | GET | `/api/usage/monthly` | this calendar month by developer + model |
+| GET | `/api/usage/window?window=1h` | selected rolling window by developer + model |
 | GET | `/api/usage/realtime` | last 5 minutes by developer + model |
 | GET | `/api/usage/trend` | last 24h, 30m buckets, per developer |
 | GET | `/api/usage/by-model` | today by model (pie chart source) |
