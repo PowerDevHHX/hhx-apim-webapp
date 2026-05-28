@@ -186,13 +186,14 @@ export default function App() {
       } catch (err) {
         if (!alive) return;
         const status = err.response?.status;
-        if (status === 401) {
+        const serverMessage = err.response?.data?.error || "";
+        if (status === 401 || serverMessage === "Auth is not configured on the server.") {
           setAuthState({ checking: false, user: null, error: "" });
         } else {
           setAuthState({
             checking: false,
             user: null,
-            error: err.response?.data?.error || err.message || "Unable to verify login state.",
+            error: serverMessage || err.message || "Unable to verify login state.",
           });
         }
       }
